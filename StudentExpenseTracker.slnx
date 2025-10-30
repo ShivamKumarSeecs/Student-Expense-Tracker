@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="StudentExpenseTracker/StudentExpenseTracker.vcxproj" />
+  <Project Path="StudentExpenseTracker/StudentExpenseTracker.vcxproj" Id="e380284b-3028-433c-bba8-bca9df500f4d" />
 </Solution>
