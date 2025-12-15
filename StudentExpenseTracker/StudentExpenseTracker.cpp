@@ -86,6 +86,7 @@ struct budgetRecord {
 // Validation Helpers
 int getValidInt(const char* prompt, bool allowZero = true);
 void getValidDate(int& d, int& m, int& y);
+void getValidName(char* buffer, int size);
 
 tm getCurrentDate();
 void normalizeDate(tm& date);
@@ -104,7 +105,6 @@ void addRecordIncomeFile();
 void displayIncomeFile();
 void modifyIncomeRecord(incomeRecord& record, bool& logAdded);
 
-// Reporting Prototypes
 void weeklyReport(int d, int m, int y);
 void monthlyReport(int m, int y);
 void report(expenseRecord expSum, incomeRecord incSum, budgetRecord budget, int monthTotalExp, const char* title);
@@ -261,6 +261,37 @@ int countLoans(bool receivable) {
     indexFile.close(); return count;
 }
 
+// checks if string contains only letters and spaces
+void getValidName(char* buffer, int size) {
+    while (true) {
+        cout << ">> Friend Name: ";
+        cin.getline(buffer, size);
+
+        // Check 1: Is it empty?
+        if (strlen(buffer) == 0) {
+            cout << RED << "   [!] Name cannot be empty.\n" << RESET;
+            continue;
+        }
+
+        // Check 2: Does it contain numbers or special symbols?
+        bool isValid = true;
+        for (int i = 0; buffer[i] != '\0'; i++) {
+            // If it's NOT a letter AND NOT a space, it's invalid
+            if (!isalpha(buffer[i]) && !isspace(buffer[i])) {
+                isValid = false;
+                break;
+            }
+        }
+
+        if (isValid) {
+            break; // Input is good, exit loop
+        }
+        else {
+            cout << RED << "   [!] Name should only contain letters (A-Z) and spaces.\n" << RESET;
+        }
+    }
+}
+
 // ================= BACKEND HANDLERS =================
 
 // backend logic to write expense to file
@@ -392,7 +423,10 @@ void showMenu() {
         case 6: manageLoans(); break;
         case 7: setBudget(); break;
         case 0: cout << GREEN << "\n>> Goodbye!\n" << RESET; return;
-        default: cout << RED << "\n   [!] Invalid Choice.\n" << RESET; cin.get();
+        default: 
+            cout << RED << "\n   [!] Invalid Choice.\n" << RESET;
+            cout << "   Press [ENTER] to try again...";
+            cin.get();
         }
     }
 }
@@ -795,6 +829,11 @@ void manageLoans() {
         choice = getValidInt(">> Choice: ");
         if (choice == 1) addNewLoan();
         else if (choice == 2) editLoan();
+        else if (choice != 0) {
+            cout << RED << "   [!] Invalid option.\n" << RESET;
+            cout << "   Press [ENTER] to try again...";
+            cin.get(); // Pauses so they can read the error
+        }
     } while (choice != 0);
 }
 
@@ -804,22 +843,36 @@ void addNewLoan() {
     cout << CYAN << "=== ADD NEW LOAN ===\n\n" << RESET;
     loanRecord newLoan{};
     tm date = getCurrentDate();
+    int choice;
 
-    cout << "  1. Today\n  2. Other Date\n  0. Back\n";
-    int choice = getValidInt(">> Choice: ");
-    if (choice == 0) return;
+    while (true) {
+        cout << "  1. Today\n  2. Other Date\n  0. Back\n";
+        choice = getValidInt(">> Choice: ");
+
+        if (choice == 0) return;
+        if (choice == 1 || choice == 2) break; // Valid input, exit loop
+
+        cout << RED << "   [!] Invalid option. Please select 1 or 2.\n\n" << RESET;
+    }
+
     if (choice == 2) {
         int d, m, y; getValidDate(d, m, y);
         date.tm_mday = d; date.tm_mon = m - 1; date.tm_year = y - 1900;
     }
     strftime(newLoan.date, sizeof(newLoan.date), "%d-%m-%Y", &date);
 
-    cout << "\n  1. Receivable\n  2. Payable\n";
-    choice = getValidInt(">> Choice: ");
+    while (true) {
+        cout << "\n  1. Receivable (Friend owes me)\n  2. Payable (I owe friend)\n";
+        choice = getValidInt(">> Choice: ");
+
+        if (choice == 1 || choice == 2) break; // Valid input, exit loop
+
+        cout << RED << "   [!] Invalid option. Please select 1 or 2.\n" << RESET;
+    }
     newLoan.receivable = (choice == 1);
     newLoan.settled = false;
 
-    cout << ">> Friend Name: "; cin.getline(newLoan.name, 50);
+    getValidName(newLoan.name, 50);
     newLoan.amount = getValidInt(">> Amount (PKR): ", false);
     cout << ">> Note: "; cin.getline(newLoan.remarks, 100);
 
@@ -833,7 +886,9 @@ void addNewLoan() {
     loanIndexRecord idx; idx.recordNum = total - 1; strcpy_s(idx.date, sizeof(idx.date), newLoan.date); idx.receivable = newLoan.receivable;
     indexFile.seekp(0, ios::end); indexFile.write(reinterpret_cast<char*>(&idx), sizeof(idx));
     indexFile.close();
-    cout << GREEN << "\n>> Saved.\n" << RESET; cin.get();
+    cout << GREEN << "\n>> Saved.\n" << RESET; 
+    cout << ">> Press [ENTER] to return...";
+    cin.get();
 }
 
 // lists all loans on screen so user can pick one
@@ -863,10 +918,32 @@ void editLoan() {
     fstream indexFile("LoanIndexFile.dat", ios::in | ios::binary);
     if (!loanFile || !indexFile) return;
     int total = displayAllLoans(loanFile, indexFile);
-    if (total == 0) { cin.get(); return; }
+    if (total == 0) { 
+        cin.get();
+        cout << ">> Press [ENTER] to return...";
+        return;
+    }
+    int choice;
 
-    int choice = getValidInt("\n>> Select Loan No. (0 to Back): ");
-    if (choice == 0) return; choice--;
+    // loop until u enter a valid number between 1 and total
+    while (true) {
+        choice = getValidInt("\n>> Select Loan No. (0 to Back): ");
+
+        if (choice == 0) return; // Exit
+
+        // Is choice within range?
+        if (choice > 0 && choice <= total) {
+            break; // Valid input, break the loop
+        }
+
+        // Error message
+        
+        cout << RED;
+        if (total == 1) cout << "   [!] Invalid selection. Please choose between 1 or exit";
+        else cout << "   [!] Invalid selection. Please choose between 1 and " << total;
+        cout <<  ".\n" << RESET;
+    }
+    choice--;
 
     loanIndexRecord idx; loanRecord rec;
     indexFile.seekg(sizeof(int) + choice * sizeof(idx)); indexFile.read(reinterpret_cast<char*>(&idx), sizeof(idx));
@@ -886,6 +963,10 @@ void editLoan() {
     }
     loanFile.seekp(idx.recordNum * sizeof(rec)); loanFile.write(reinterpret_cast<char*>(&rec), sizeof(rec));
     loanFile.close(); indexFile.close();
+
+    cout << GREEN << "\n>> Changes Saved.\n" << RESET; 
+    cout << ">> Press [ENTER] to return...";           
+    cin.get();
 }
 
 // handles logic if user changes loan amount, can record diff as transaction
@@ -931,25 +1012,50 @@ void setBudget() {
 
     cout << ">> Setting Budget for: " << (rec.month + 1) << "-" << rec.year << endl;
     cout << "--------------------------------\n";
-    rec.totalLimit = getValidInt(">> Enter TOTAL Monthly Budget (Enter 0 to use Category limits): ");
 
-    if (rec.totalLimit > 0) {
+    cout << "  1. Set Total Budget Limit\n";
+    cout << "  2. Set Category-wise Limits\n";
+    cout << "  0. Back\n\n";
+
+    int choice = getValidInt(">> Choice: ");
+
+    if (choice == 0) return; 
+
+    if (choice == 1) {
+        rec.totalLimit = getValidInt(">> Enter Monthly Limit: ");
+
+        // Reset categories so Total Limit takes precedence
+        rec.food = 0; rec.transport = 0; rec.entertainment = 0;
+        rec.bills = 0; rec.shopping = 0; rec.rent = 0; rec.misc = 0;
+
         cout << GREEN << "\n>> Global Limit set to " << rec.totalLimit << ".\n" << RESET;
-        rec.food = 0; rec.transport = 0; rec.entertainment = 0; rec.bills = 0; rec.shopping = 0; rec.rent = 0; rec.misc = 0;
     }
-    else {
-        cout << "\n>> No Total Limit set. Please enter Category Limits (0 for none):\n";
-        rec.food = getValidInt("   [1] Food:      "); rec.transport = getValidInt("   [2] Transport: ");
-        rec.entertainment = getValidInt("   [3] Outings:   "); rec.bills = getValidInt("   [4] Bills:     ");
-        rec.shopping = getValidInt("   [5] Shopping:  "); rec.rent = getValidInt("   [6] Rent:      ");
+    else if (choice == 2) {
+        cout << "\n>> Enter Category Limits:\n";
+        rec.food = getValidInt("   [1] Food:      ");
+        rec.transport = getValidInt("   [2] Transport: ");
+        rec.entertainment = getValidInt("   [3] Outings:   ");
+        rec.bills = getValidInt("   [4] Bills:     ");
+        rec.shopping = getValidInt("   [5] Shopping:  ");
+        rec.rent = getValidInt("   [6] Rent:      ");
         rec.misc = getValidInt("   [7] Misc:      ");
+
         rec.totalLimit = rec.food + rec.transport + rec.entertainment + rec.bills + rec.shopping + rec.rent + rec.misc;
         cout << "\n>> Effective Total Budget: " << rec.totalLimit << endl;
     }
+    else {
+        cout << RED << "\n   [!] Invalid Choice.\n" << RESET;
+        cout << "   Press [ENTER] to return...";
+        cin.get();
+        return;
+    }
+
     fstream file("BudgetFile.dat", ios::app | ios::binary);
     file.write(reinterpret_cast<char*>(&rec), sizeof(rec));
     file.close();
-    cout << GREEN << "\n>> Budget Saved!\n" << RESET; cin.get();
+    cout << GREEN << "\n>> Budget Saved!\n" << RESET; 
+    cout << ">> Press [ENTER] to return...";
+    cin.get();
 }
 
 // checks if current spending is over budget and warns user
@@ -961,7 +1067,7 @@ void checkBudgetWarnings(tm date) {
     if (currentTotal > budget.totalLimit) cout << RED << " [CRITICAL] Monthly Budget EXCEEDED! (" << currentTotal << "/" << budget.totalLimit << ")\n" << RESET;
     else if (currentTotal > (budget.totalLimit * 0.8)) cout << YELLOW << " [WARNING]  You have used " << (currentTotal * 100 / budget.totalLimit) << "% of your monthly budget.\n" << RESET;
     else cout << GREEN << " [INFO]     Monthly Budget Left: " << (budget.totalLimit - currentTotal) << "\n" << RESET;
-    cout << "----------------------------------------\n";
+    cout << "------------------------------------edi----\n";
 }
 
 // iterates through file to sum up expenses for the month
